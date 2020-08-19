@@ -25,6 +25,14 @@ Run it from cmd. You can use these parameters:
 	
 	-java "PATH\FOLDER" to set jdk directory. For example for me it's "C:\Program Files\Java\jdk-9.0.4"
 
+For example you can use Test.h file - it has two structures:
+
+	cd PATH\StructParser
+	
+	StructParser.py -f "Test.h" -o "out" -java "C:\Program Files\Java\jdk-9.0.4"
+
+This will do all work. Then in folder out you will find .java files.
+
 This program will parse each file and for each struct it will create java class with name "YourStructNameJ" so it adds "J" to the end. And .java file
 Also for each struct it generates .cpp JNI file in "YOUR_OUTPUT_DIRECTORY\CPP_sources" and compiles this file to .so file to "YOUR_OUTPUT_DIRECTORY\CPP_LIB"
 This .so file is dynamic library which java will load in runtime. It has definitions of all native functions in generated java class. 
