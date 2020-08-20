@@ -1,0 +1,28 @@
+	Welcome to StructParser program
+	You can read more info about this program there:
+	https://github.com/AndrusovN/StructParser/blob/master/README.md
+
+	Use these flags for setup:
+
+		-f "PATH\FILE" to choose files to port to java (to use many files, print many flags -f)
+		
+		-o "PATH\FOLDER" to set output folder (there you will find .java .cpp and .so files) (if this path does not exists, it will be automatically generated) (default value is '.\')
+		
+		-java "PATH" to set folder with java (for example -java "C:\Program Files\Java\jdk-9.0.4" is default value)
+		
+		-I "PATH" to add include path
+		
+		-mrl <number> to set maximum recursion level in searching included files (for example -mrl 10) (default value is 10)
+		
+		-cc "SOME OPTION" to add g++ compiler option (for example -cc "-Wall")
+		
+		-jc "SOME OPTIO" to add javac compiler option (for example -jc "-Xlint:deprecation")
+		
+		-es to stop program in case of error
+		
+		-ec to continue program running in case of error
+		
+		--help to get this text again
+
+	Hope this program will help you with porting project to java language
+	

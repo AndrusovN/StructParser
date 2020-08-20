@@ -1,12 +1,7 @@
-struct MyStruct1{
-    int a;
-    char b;
-    bool c;
-};
-
-struct AnotherStruct{
-    bool hasValue;
-    long value;
-    unsigned index;
-    char letter;
+#include <iostream>
+#include "include.h"
+struct AnotherStruct
+{
+    MyStruct1 value;
+    bool isValueCorrect = true;
 };
