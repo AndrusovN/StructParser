@@ -11,7 +11,7 @@ create java code from c++ code.
 
 This is a very first variant, but it works. Using it you can create java classes from c++ structures in .h files.
 
-## What do you need ti run this program
+## What do you need to run this program
 
 To run this program you will need:
 1. Java development kit (it's better to use 9.x version, because I tried with it. But you can try with another versions - I'm not sure this will work)
