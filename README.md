@@ -11,7 +11,7 @@ create java code from c++ code.
 
 This is a very first variant, but it works. Using it you can create java classes from c++ structures in .h files.
 
-## What do you need ti run this program
+## What do you need to run this program
 
 To run this program you will need:
 1. Java development kit (it's better to use 9.x version, because I tried with it. But you can try with another versions - I'm not sure this will work)
@@ -45,7 +45,7 @@ Run it from cmd. You can use these parameters:
 	
 	--help to get this text again
 
-For example you can use Test.h file - it has two structures:
+For example you can use `Test.h` file - it has two structures:
 
 	cd PATH\StructParser
 	
@@ -53,21 +53,21 @@ For example you can use Test.h file - it has two structures:
 
 This will do all work. Then in folder out you will find .java files.
 
-This program will parse each file and for each struct it will create java class with name "YourStructNameJ" so it adds "J" to the end. And .java file
-Also for each struct it generates .cpp JNI file in "YOUR_OUTPUT_DIRECTORY\CPP_sources" and compiles this file to .so file to "YOUR_OUTPUT_DIRECTORY\CPP_LIB"
-This .so file is dynamic library which java will load in runtime. It has definitions of all native functions in generated java class. 
-Also it compiles .java files to .class files. If you move you .class or .java files, don't forget to move .so files the same way. So if you have C:\PATH\YOUR_CLASS.class,
-you also have to have C:\PATH\CPP_LIB\YOUR_CLASS.so file
+This program will parse each file and for each struct it will create java class with name `YourStructNameJ` so it adds "J" to the end. And `.java` file
+Also for each struct it generates `.cpp` JNI file in `YOUR_OUTPUT_DIRECTORY\CPP_sources` and compiles this file to `.so` file to `YOUR_OUTPUT_DIRECTORY\CPP_LIB`
+This `.so` file is dynamic library which java will load in runtime. It has definitions of all native functions in generated java class. 
+Also it compiles `.java` files to `.class` files. If you move you `.class` or `.java` files, don't forget to move `.so` files the same way. So if you have 
+`C:\PATH\YOUR_CLASS.class`, you also have to have `C:\PATH\CPP_LIB\YOUR_CLASS.so` file.
 
-Java class contains empty constructor and Get/Set method for each variable in your struct. It has finilize method (don't use it - it is for garbage collector).
-And init function is system function, which initialize class, using c++ code.
-Also it has field _pointer: please don't use it - it is system field which
-connects c++ and java code. If you change it, everything can die and world will crash with error 4996.
+Java class contains empty constructor and Get/Set method for each variable in your struct. It has `finilize()` method (don't use it - it is for garbage collector).
+And `init()` function is system function, which initialize class, using c++ code.
+Also it has field `_pointer`: please don't use it - it is system field which
+connects c++ and java code. If you change it, everything can die and world will crash with `error 4996`.
 
-Also this program is in very first version so it can convert only simple types (int, long, char, bool, unsigned, short)
+Also this program is in very first version so it can convert only simple types (int, long, char, bool, unsigned, short), structures, arrays and enums.
 
 If there is compilation error while running this program, it provides string which compiles code using g++. 
-You can copy it to cmd and see compiler errors or you can look for compiler parameters and use another compiler if you want.
+So you can recompile it with another parameters or another compiler if you want.
 
 ## About arrays
 Arrays in c++ and java are very different. In c++ it's just pointer to the first item, when in java it is special java type.
@@ -76,19 +76,22 @@ If you use an array in your struct you also have to know it's length. (OK, lengt
 but this type of arrays is not supported yet).
 
 So let's imagine such simple struct:
-    struct MyStruct {
-		char * my_name;
-		int my_size;
-	}
-Where my_size is the size of name. To make StructParser know that relation between my_name variable and my_size variable, include "structparser.h" file
-from root of repository and use __ARRAY__(size_variable_name) instead of "*" symbol.
-    #include "structparser.h" //Included from C:\Projects\GitHub\StructParser
-	struct MyStruct {
-		char __ARRAY__(my_size) my_name;
-		int my_size;
-    }
-	
-StructParser will generate methods to get java char[], to set it, with java char[] and to change one array item.
+```c++
+struct MyStruct {
+	char * my_name;
+	int my_size;
+}
+```
+Where `my_size` is the size of name. To make StructParser know that relation between `my_name` variable and `my_size` variable, include "structparser.h" file
+from root of repository and use `__ARRAY__(size_variable_name)` instead of `*` symbol. Like this:
+```c++
+#include "structparser.h" //Included from C:\Projects\GitHub\StructParser
+struct MyStruct {
+	char __ARRAY__(my_size) my_name;
+	int my_size;
+}
+```
+StructParser will generate methods to get java `char[]`, to set it, with java `char[]` and to change one array item.
 Sadly now StructParser supports only one-dimentional arrays.
 
 I hope this program will help you with connecting c++ and java code.
