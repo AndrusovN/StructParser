@@ -168,7 +168,19 @@ def search_type(type_name, files_to_search, filepath, recursion_level=0):
                     n_struct_text = ''
                     n_brackets = 0
                     found = False
+
+                    t_brackets = 0
+                    c_namespace = []
                     for ln in lns:
+                        if '{' in ln:
+                            t_brackets += 1
+                        if '}' in ln:
+                            t_brackets -= 1
+                        if 'namespace ' in ln and 'using ' not in ln:
+                            current_namespace.append({'name':
+                                                            ln.replace('{', '').replace('namespace', '')
+                                                     .replace('\t', '').replace(' ', '').replace('\n', ''),
+                                                    'depth': t_brackets})
                         if found:
                             if '{' in ln:
                                 n_brackets += 1
@@ -187,7 +199,7 @@ def search_type(type_name, files_to_search, filepath, recursion_level=0):
                                     n_brackets += 1
 
                     if found:
-                        parse_struct(n_struct_text, type_name, p + '\\' + f, extract_includes(text))
+                        parse_struct(n_struct_text, type_name, p + '\\' + f, extract_includes(text), current_namespace)
                         return True
 
                     if type_name not in type_conversion.keys():
@@ -201,15 +213,26 @@ def search_type(type_name, files_to_search, filepath, recursion_level=0):
         return False
 
 
-def parse_struct(text, name, filename, includes):
+def parse_struct(text, name, filename, includes, namespaces):
     print(name)
     jname = name + 'J'
-    print(jname)
-    out_j = open(output_dir + "\\" + jname + '.java', 'w')
+    pack_name = '.'.join(list(map(lambda x: x['name'], namespaces)))
+    print('from ' + pack_name)
+    if pack_name == '':
+        pack_name = '.'
+
+    cur_dir = output_dir
+    for fold in pack_name.split('.'):
+        if fold not in os.listdir(cur_dir):
+            os.mkdir(cur_dir + '\\' + fold)
+        cur_dir = cur_dir + '\\' + fold
+
+    out_j = open(cur_dir + '\\' + jname + '.java', 'w')
+    out_j.write('package ' + pack_name + ';\n') if pack_name != '.' else out_j.write('')
     out_j.write('public class ' + jname + ' {\n')
     out_j.write('\tstatic {\n\t\tSystem.load(' + jname +
         '.class.getProtectionDomain().getCodeSource().getLocation().getPath().substring(1).replaceAll("/","\\\\\\\\")' +
-        ' + "CPP_LIB\\\\\\\\' + jname + '.so");\n\t}\n\n')
+        ' + "' + pack_name.replace('.', '\\\\') + '\\\\CPP_LIB\\\\' + jname + '.so");\n\t}\n\n')
     out_j.write('\tprivate long _pointer = 0;\n\n')
     out_j.write('\tprivate native void init();\n')
     out_j.write('\tprotected native void finalize() throws Throwable;\n')
@@ -217,14 +240,21 @@ def parse_struct(text, name, filename, includes):
     out_j.write('\tpublic ' + jname + '() {\n\t\tinit();\n\t}\n\n')
     out_j.write('\tpublic ' + jname + '(long pointer) {\n\t\t_pointer = pointer;\n\t}\n\n')
 
-    out_c = open(output_dir + "\\CPP_sources\\" + jname + '.cpp', 'w')
-    out_c.write('#ifndef _Included' + jname + '\n#define _Included_' + jname + '\n#include <jni.h>' +
+    if 'CPP_sources' not in os.listdir(cur_dir):
+        os.mkdir(cur_dir + '\\CPP_sources')
+    if 'CPP_LIB' not in os.listdir(cur_dir):
+        os.mkdir(cur_dir + '\\CPP_LIB')
+    pack_cname = pack_name.replace('.', '_') + '_'
+    out_c = open(cur_dir + "\\CPP_sources\\" + jname + '.cpp', 'w')
+    out_c.write('#ifndef _Included_' + pack_cname + jname + '\n#define _Included_' + pack_cname + jname + '\n#include <jni.h>' +
                 '\n#include "' + filename + '"\n' +
                 '\n#ifdef __cplusplus\nextern "C" {\n#endif\n')
     for namespace in current_file_namespaces:
         out_c.write('\nusing ' + namespace + ';')
 
-    out_c.write('\nJNIEXPORT void JNICALL Java_' + jname + '_init' +
+
+
+    out_c.write('\nJNIEXPORT void JNICALL Java_' + pack_cname + jname + '_init' +
                 '\n(JNIEnv * env, jobject obj) {\n')
     out_c.write('\t' + name + ' * object = new ' + name + '();\n' +
                 '\tjclass cls = env->GetObjectClass(obj);\n' +
@@ -238,12 +268,12 @@ def parse_struct(text, name, filename, includes):
                 '\t' + name + '* object = (' + name + '*)(__int64)var;\n'
                 '\treturn object;\n}\n')
 
-    out_c.write('JNIEXPORT void JNICALL Java_' + jname + '_finalize' +
+    out_c.write('JNIEXPORT void JNICALL Java_' + pack_cname + jname + '_finalize' +
                 '\n(JNIEnv * env, jobject obj) {\n')
     out_c.write('\t' + name + '* object = get_' + name + '(env, obj);\n' +
                 '\tif(object != 0) {\n\t\tdelete object;\n\t\tobject = 0;\n\t}\n}\n')
 
-    out_c.write('JNIEXPORT jboolean JNICALL Java_' + jname + '_equals' +
+    out_c.write('JNIEXPORT jboolean JNICALL Java_' + pack_cname + jname + '_equals' +
                 '\n(JNIEnv * env, jobject obj, jobject second) {\n' +
                 '\t' + name + '* current = get_' + name + '(env, obj);\n' +
                 '\t' + name + '* another = get_' + name + '(env, second);\n' +
@@ -353,7 +383,7 @@ def parse_struct(text, name, filename, includes):
         varname = c_varname
         out_j.write('\tpublic native ' + type_conversion[key][0] + ' Get' + varname + '();\n')
         out_j.write('\tpublic native void' + ' Set' + varname + '(' + type_conversion[key][0] + ' data);\n')
-        out_c.write('\nJNIEXPORT ' + type_conversion[key][1] + ' JNICALL Java_' + jname + '_Get' + varname +
+        out_c.write('\nJNIEXPORT ' + type_conversion[key][1] + ' JNICALL Java_' + pack_cname + jname + '_Get' + varname +
                     '\n(JNIEnv * env, jobject obj) {\n')
         out_c.write('\t' + name + '* object = get_' + name + '(env, obj);\n')
         if type_conversion[key][1] != 'jobject':
@@ -361,11 +391,11 @@ def parse_struct(text, name, filename, includes):
                 '\t' + key + ' result = object->' + c_varname + ';\n' +
                 '\treturn (' + type_conversion[key][1] + ')result;\n}\n')
         else:
-            out_c.write('\tjclass cls = env->FindClass("' + type_conversion[key][0] + '");\n' +
+            out_c.write('\tjclass cls = env->FindClass("' + type_conversion[key][0].replace('.', '/') + '");\n' +
                         '\tjmethodID constructor = env->GetMethodID(cls, "<init>", "(J)V");\n' +
                         '\tjobject result = env->NewObject(cls, constructor, (jlong)&(object->' + c_varname + '));\n' +
                         '\treturn result;\n}\n')
-        out_c.write('\nJNIEXPORT void JNICALL Java_' + jname + "_Set" + varname +
+        out_c.write('\nJNIEXPORT void JNICALL Java_' + pack_cname + jname + "_Set" + varname +
                     "\n(JNIEnv * env, jobject obj, " + type_conversion[key][1] + " data) {\n")
         out_c.write('\t' + name + '* object = get_' + name + '(env, obj);\n')
 
@@ -388,10 +418,10 @@ def parse_struct(text, name, filename, includes):
                     ' throws ArrayIndexOutOfBoundsException;\n')
 
         if type_conversion[arr_vars[arr]['type']][1] == 'jobject':
-            out_c.write('\nJNIEXPORT jobjectArray JNICALL Java_' + jname + '_Get' + arr +
+            out_c.write('\nJNIEXPORT jobjectArray JNICALL Java_' + pack_cname + jname + '_Get' + arr +
                         '\n(JNIEnv * env, jobject obj) {\n' +
                         '\t' + name + '* object = get_' + name + '(env, obj);\n' +
-                        '\tjclass cls = env->FindClass("' + type_conversion[arr_vars[arr]['type']][0] + '");\n'
+                        '\tjclass cls = env->FindClass("' + type_conversion[arr_vars[arr]['type']][0].replace('.', '/') + '");\n'
                         '\tjobjectArray arr = env->NewObjectArray(' +
                         'object->' + arr_vars[arr]['size'] + ', cls, 0);\n' +
                         '\tjmethodID constructor = env->GetMethodID(cls, "<init>", "(J)V");\n' +
@@ -400,10 +430,10 @@ def parse_struct(text, name, filename, includes):
                         '\t\tenv->SetObjectArrayElement(arr, i, nobj);\n' +
                         '\t}\n\treturn arr;\n}\n')
 
-            out_c.write('\nJNIEXPORT void JNICALL Java_' + jname + '_Set' + arr +
+            out_c.write('\nJNIEXPORT void JNICALL Java_' + pack_cname + jname + '_Set' + arr +
                         '\n(JNIEnv * env, jobject obj, jobjectArray data) {\n' +
                         '\t' + name + '* object = get_' + name + '(env, obj);\n' +
-                        '\tjclass cls = env->FindClass("' + type_conversion[arr_vars[arr]['type']][0] + '");\n' +
+                        '\tjclass cls = env->FindClass("' + type_conversion[arr_vars[arr]['type']][0].replace('.', '/') + '");\n' +
                         '\tjfieldID fid = env->GetFieldID(cls, "_pointer", "J");\n' +
                         '\tint size = env->GetArrayLength(data);\n'
                         '\tobject->' + arr + ' = new ' + arr_vars[arr]['type'] + '[size];\n' +
@@ -414,10 +444,10 @@ def parse_struct(text, name, filename, includes):
                         '\t\tobject->' + arr + '[i] = *(' + arr_vars[arr]['type'] + '*)ptr;\n' +
                         '\t}\n}\n')
 
-            out_c.write('\nJNIEXPORT void JNICALL Java_' + jname + '_Set' + arr + 'Element' +
+            out_c.write('\nJNIEXPORT void JNICALL Java_' + pack_cname + jname + '_Set' + arr + 'Element' +
                         '\n(JNIEnv * env, jobject obj, jobject value, jint index) {\n' +
                         '\t' + name + '* object = get_' + name + '(env, obj);\n' +
-                        '\tjclass cls = env->FindClass("' + type_conversion[arr_vars[arr]['type']][0] + '");\n' +
+                        '\tjclass cls = env->FindClass("' + type_conversion[arr_vars[arr]['type']][0].replace('.', '/') + '");\n' +
                         '\tjfieldID fid = env->GetFieldID(cls, "_pointer", "J");\n' +
                         '\tif (0 <= index && index < object->' + arr_vars[arr]['size'] + ') {\n' +
                         '\t\t__int64 ptr = env->GetLongField(value, fid);\n' +
@@ -428,7 +458,7 @@ def parse_struct(text, name, filename, includes):
                         '\t}\n}\n')
         else:
             out_c.write('\nJNIEXPORT ' + type_conversion[arr_vars[arr]['type']][1] +
-                        'Array JNICALL Java_' + jname + '_Get' + arr +
+                        'Array JNICALL Java_' + pack_cname + jname + '_Get' + arr +
                         '\n(JNIEnv * env, jobject obj) {\n' +
                         '\t' + name + '* object = get_' + name + '(env, obj);\n' +
                         '\t' + type_conversion[arr_vars[arr]['type']][1] + 'Array arr = env->New' +
@@ -441,7 +471,7 @@ def parse_struct(text, name, filename, includes):
                         '\t}\n\tenv->Release' + type_conversion[arr_vars[arr]['type']][0].title() +
                         'ArrayElements(arr, jarr, 0);\n' + '\treturn arr;\n}\n')
 
-            out_c.write('\nJNIEXPORT void JNICALL Java_' + jname + '_Set' + arr +
+            out_c.write('\nJNIEXPORT void JNICALL Java_' + pack_cname + jname + '_Set' + arr +
                         '\n(JNIEnv * env, jobject obj, ' + type_conversion[arr_vars[arr]['type']][1] + 'Array data) {\n' +
                         '\t' + name + '* object = get_' + name + '(env, obj);\n' +
                         '\tint size = env->GetArrayLength(data);\n'
@@ -453,7 +483,7 @@ def parse_struct(text, name, filename, includes):
                         '\t\tobject->' + arr + '[i] = (' + arr_vars[arr]['type'] + ')jarr[i];\n' +
                         '\t}\n}\n')
 
-            out_c.write('\nJNIEXPORT void JNICALL Java_' + jname + '_Set' + arr + 'Element' +
+            out_c.write('\nJNIEXPORT void JNICALL Java_' + pack_cname + jname + '_Set' + arr + 'Element' +
                         '\n(JNIEnv * env, jobject obj, ' +
                         type_conversion[arr_vars[arr]['type']][1] + ' value, jint index) {\n' +
                         '\t' + name + '* object = get_' + name + '(env, obj);\n' +
@@ -472,17 +502,17 @@ def parse_struct(text, name, filename, includes):
     compiler_options = 'g++ -I"' + java_dir + '\\include" -I"' + filepath + '" -I"' + sys_path + '" '
     for ipath in include_paths:
         compiler_options += '-I"' + ipath + '" '
-    compiler_options += '-fPIC "' + output_dir + \
+    compiler_options += '-fPIC "' + cur_dir + \
                         '\\CPP_sources\\' + jname + '.cpp" '
     for co in additional_compiler_options:
         compiler_options += co + ' '
-    compiler_options += '"' + output_dir + '\\CPP_LIB\\' + jname + '.so"'
+    compiler_options += '"' + cur_dir + '\\CPP_LIB\\' + jname + '.so"'
     print(compiler_options)
     print('\n')
     #print(check_output(compiler_options, shell=True))
     os.system(compiler_options)
-    java_files.append(output_dir + "\\" + jname + '.java')
-    type_conversion[name] = [jname, 'jobject']
+    java_files.append(cur_dir + "\\" + jname + '.java')
+    type_conversion[name] = [pack_name + '.' + jname, 'jobject']
 
 
 try:
@@ -532,10 +562,24 @@ for file in files_to_convert:
 
     includes = extract_includes(all_file)
 
+    total_brackets = 0
+    current_namespace = []
+
     for line in lines:
         if '*/' in line:
             is_comment = False
         if not is_comment:
+            if 'namespace ' in line and 'using' not in line:
+                current_namespace.append({'name':
+                                                line.replace('{', '').replace('namespace', '')
+                                         .replace('\t', '').replace(' ', '').replace('\n', ''),
+                                          'depth': total_brackets})
+            if '{' in line:
+                total_brackets += 1
+            if '}' in line:
+                total_brackets -= 1
+                if current_namespace[-1]['depth'] == total_brackets:
+                    current_namespace.pop(-1)
             if is_parsing:
                 if '{' in line:
                     brackets += 1
@@ -554,7 +598,7 @@ for file in files_to_convert:
 
                 if brackets == 0:
                     is_parsing = False
-                    parse_struct(struct_text, struct_name, file, includes)
+                    parse_struct(struct_text, struct_name, file, includes, current_namespace)
 
             if 'struct ' in line:
                 if not is_parsing:
