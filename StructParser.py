@@ -37,6 +37,8 @@ while True:
         print("Exception! Type config string cofmat is invalid:\n" + s.replace('\n', '') +
               "\nC_TYPE--JAVA_TYPE--JNI_TYPE expected")
 
+f_conv.close()
+
 
 def help():
     try:
@@ -47,7 +49,7 @@ def help():
         print("Error! Cannot read help file:\n" + help_path)
     quit()
 
-f_conv.close()
+
 files_to_convert = []
 i = 0
 MAX_RECURSION_LEVEL = 10
@@ -208,11 +210,12 @@ def parse_struct(text, name, filename, includes):
     out_j.write('\tstatic {\n\t\tSystem.load(' + jname +
         '.class.getProtectionDomain().getCodeSource().getLocation().getPath().substring(1).replaceAll("/","\\\\\\\\")' +
         ' + "CPP_LIB\\\\\\\\' + jname + '.so");\n\t}\n\n')
-    out_j.write('\tprivate long _pointer = 0;\n')
+    out_j.write('\tprivate long _pointer = 0;\n\n')
     out_j.write('\tprivate native void init();\n')
     out_j.write('\tprotected native void finalize() throws Throwable;\n')
-    out_j.write('\tpublic ' + jname + '() {\n\t\tinit();\n\t}\n')
-    out_j.write('\tpublic ' + jname + '(long pointer) {\n\t\t_pointer = pointer;\n\t}\n')
+    out_j.write('\tpublic native boolean equals(' + jname + ' second);\n\n\n')
+    out_j.write('\tpublic ' + jname + '() {\n\t\tinit();\n\t}\n\n')
+    out_j.write('\tpublic ' + jname + '(long pointer) {\n\t\t_pointer = pointer;\n\t}\n\n')
 
     out_c = open(output_dir + "\\CPP_sources\\" + jname + '.cpp', 'w')
     out_c.write('#ifndef _Included' + jname + '\n#define _Included_' + jname + '\n#include <jni.h>' +
@@ -239,6 +242,12 @@ def parse_struct(text, name, filename, includes):
                 '\n(JNIEnv * env, jobject obj) {\n')
     out_c.write('\t' + name + '* object = get_' + name + '(env, obj);\n' +
                 '\tif(object != 0) {\n\t\tdelete object;\n\t\tobject = 0;\n\t}\n}\n')
+
+    out_c.write('JNIEXPORT jboolean JNICALL Java_' + jname + '_equals' +
+                '\n(JNIEnv * env, jobject obj, jobject second) {\n' +
+                '\t' + name + '* current = get_' + name + '(env, obj);\n' +
+                '\t' + name + '* another = get_' + name + '(env, second);\n' +
+                '\treturn (*current == *another);\n}\n')
 
     p1 = r'(?:[ ]+[*a-zA-Z0-9_]+(?:[ \n]*(?:=[a-zA-Z0-9:_ \n\(\)]+)*)*)'
     pattern = \
@@ -294,22 +303,54 @@ def parse_struct(text, name, filename, includes):
             else:
                 arr_vars[var_name] = {'type': type_name, 'size': size_name}
                 vars.pop(size_name)
+
+    trueVars = {}
     for var in vars.keys():
         key = vars[var]
         c_varname = var.replace(key, '').replace(' ', '').replace('\n', '').replace(';', '').replace('=', '')
-        varname = c_varname.title()
-        if key not in type_conversion:
-            res = search_type(key, includes, filepath)
+        trueVars[c_varname] = vars[var]
+        if trueVars[c_varname] not in type_conversion:
+            res = search_type(trueVars[c_varname], includes, filepath)
             if not res:
-                print('ERROR! Unknown type \'' + key + '\'.')
+                print('ERROR! Unknown type \'' + trueVars[c_varname] + '\'.')
                 if STOP_IF_ERROR:
                     print('PROGRAM FINISHED!')
                     out_c.close()
                     out_j.close()
                     quit()
                 else:
-                    print('PROGRAM IGNORED FIELD \'' + c_varname + '\'')
-                    continue
+                    print('PROGRAM IGNORED STRUCT \'' + jname + '\'')
+                    return
+    vars = trueVars
+
+    out_j.write('\tpublic ' + jname + '(')
+    var_length = len(vars.keys())
+    for i in range(var_length):
+        var = list(vars.keys())[i]
+        t = vars[var]
+        out_j.write(type_conversion[t][0] + ' _' + var)
+        if i < var_length - 1:
+            out_j.write(', ')
+    arr_length = len(arr_vars.keys())
+    if var_length > 0 and arr_length > 0:
+        out_j.write(', ')
+    for i in range(arr_length):
+        arrn = list(arr_vars.keys())[i]
+        out_j.write(type_conversion[arr_vars[arrn]['type']][0] + '[] _' + arrn)
+        if i < arr_length - 1:
+            out_j.write(', ')
+    out_j.write(') {\n')
+    out_j.write('\t\tinit();\n')
+    for var in vars.keys():
+        out_j.write('\t\tSet' + var + '(_' + var + ');\n')
+    for arr in arr_vars:
+        out_j.write('\t\tSet' + arr + '(_' + arr + ');\n')
+    out_j.write('\t}\n\n\n')
+
+    for var in vars.keys():
+        key = vars[var]
+        c_varname = var # .replace(key, '').replace(' ', '').replace('\n', '').replace(';', '').replace('=', '')
+        varname = c_varname
         out_j.write('\tpublic native ' + type_conversion[key][0] + ' Get' + varname + '();\n')
         out_j.write('\tpublic native void' + ' Set' + varname + '(' + type_conversion[key][0] + ' data);\n')
         out_c.write('\nJNIEXPORT ' + type_conversion[key][1] + ' JNICALL Java_' + jname + '_Get' + varname +
